@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use audiotags::Tag;
+use audiotags::{Album, Tag};
 
 use crate::{config::Config, lua::LuaEngine, trackdata::TrackData};
 
@@ -28,9 +28,34 @@ fn main() -> Result<()> {
 
     let files = find_files(&config.root)?;
     for file in files {
-        let tag = Tag::new().read_from_path(&file)?;
-        let data = TrackData::from(tag);
-        lua.run_callbacks(&data)?;
+        let mut tag = Tag::new().read_from_path(&file)?;
+        let data = TrackData::from(&tag);
+        let new_data = lua.run_callbacks(&data)?;
+
+        if let Some(new_data) = new_data {
+            println!("retagging {}", file.display());
+
+            tag.set_title(&new_data.title);
+            tag.set_artist(&new_data.artist);
+            tag.set_year(new_data.year);
+            tag.set_genre(&new_data.genre);
+            tag.set_comment(new_data.comment);
+            tag.set_composer(new_data.composer);
+            tag.set_album_artist(&new_data.album_artist);
+            tag.set_disc_number(new_data.disc_number);
+            tag.set_track_number(new_data.track_number);
+
+            tag.set_album(Album {
+                title: &new_data.album.title,
+                artist: Some(&new_data.album.artist),
+                cover: new_data.album.cover.as_ref().map(|c| audiotags::Picture {
+                    data: c.data.as_ref(),
+                    mime_type: c.mime.into(),
+                }),
+            });
+
+            tag.write_to_path(file.to_str().unwrap())?;
+        }
     }
 
     Ok(())

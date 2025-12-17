@@ -39,16 +39,18 @@ impl LuaEngine {
         Ok(())
     }
 
-    pub fn run_callbacks(&self, data: &TrackData) -> Result<()> {
+    pub fn run_callbacks(&self, data: &TrackData) -> Result<Option<TrackData>> {
         let keys = self.callbacks.lock().unwrap();
 
-        let value = self.lua.to_value(data)?;
+        let mut value = self.lua.to_value(data)?;
 
         for key in keys.iter() {
             let func: LuaFunction = self.lua.registry_value(key)?;
-            func.call::<()>(value.clone())?;
+            value = func.call(value.clone())?;
         }
 
-        Ok(())
+        let new_data: Option<TrackData> = self.lua.from_value(value)?;
+
+        Ok(new_data)
     }
 }

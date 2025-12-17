@@ -1,15 +1,28 @@
 use core::fmt;
 
-use audiotags::{Album, AudioTag};
-use serde::Serialize;
+use audiotags::AudioTag;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum MimeType {
     Png,
     Jpeg,
     Tiff,
     Bmp,
     Gif,
+}
+
+impl From<MimeType> for audiotags::MimeType {
+    fn from(mt: MimeType) -> Self {
+        use audiotags::MimeType as MT;
+        match mt {
+            MimeType::Png => MT::Png,
+            MimeType::Jpeg => MT::Jpeg,
+            MimeType::Tiff => MT::Tiff,
+            MimeType::Bmp => MT::Bmp,
+            MimeType::Gif => MT::Gif,
+        }
+    }
 }
 
 impl From<audiotags::MimeType> for MimeType {
@@ -25,11 +38,11 @@ impl From<audiotags::MimeType> for MimeType {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Picture {
     #[serde(with = "serde_bytes")]
-    data: Box<[u8]>,
-    mime: MimeType,
+    pub data: Box<[u8]>,
+    pub mime: MimeType,
 }
 
 impl fmt::Debug for Picture {
@@ -41,53 +54,51 @@ impl fmt::Debug for Picture {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AlbumData {
-    title: String,
-    artist: String,
-    cover: Option<Picture>,
+    pub title: String,
+    pub artist: String,
+    pub cover: Option<Picture>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TrackData {
-    title: String,
-    artist: String,
-    album: AlbumData,
-    year: i32,
-    genre: String,
-    comment: String,
-    composer: String,
-    album_artist: String,
-    disc_number: u16,
-    track_number: u16,
-    duration: f64,
+    pub title: String,
+    pub artist: String,
+    pub album: AlbumData,
+    pub year: i32,
+    pub genre: String,
+    pub comment: String,
+    pub composer: String,
+    pub album_artist: String,
+    pub disc_number: u16,
+    pub track_number: u16,
+    pub duration: f64,
 }
 
-impl From<Box<dyn AudioTag + Send + Sync>> for TrackData {
-    fn from(tag: Box<dyn AudioTag + Send + Sync>) -> Self {
+impl From<&Box<dyn AudioTag + Send + Sync>> for TrackData {
+    fn from(tag: &Box<dyn AudioTag + Send + Sync>) -> Self {
+        let album = tag.album();
+        let (album_title, album_artist, cover) = if let Some(album) = album {
+            (
+                album.title.to_owned(),
+                album.artist.unwrap_or_default().to_owned(),
+                album.cover.map(|c| Picture {
+                    data: c.data.into(),
+                    mime: c.mime_type.into(),
+                }),
+            )
+        } else {
+            ("Unknown".to_owned(), String::new(), None)
+        };
+
         Self {
             title: tag.title().unwrap_or_default().to_owned(),
             artist: tag.artist().unwrap_or_default().to_owned(),
             album: AlbumData {
-                title: tag
-                    .album()
-                    .unwrap_or_else(|| Album::with_title("Unknown"))
-                    .title
-                    .to_owned(),
-                artist: tag
-                    .album()
-                    .unwrap_or_else(|| Album::with_title("Unknown"))
-                    .artist
-                    .unwrap_or_default()
-                    .to_owned(),
-                cover: tag
-                    .album()
-                    .unwrap_or_else(|| Album::with_title("Unknown"))
-                    .cover
-                    .map(|c| Picture {
-                        data: c.data.into(),
-                        mime: c.mime_type.into(),
-                    }),
+                title: album_title,
+                artist: album_artist,
+                cover,
             },
             year: tag.year().unwrap_or_default(),
             genre: tag.genre().unwrap_or_default().to_owned(),
