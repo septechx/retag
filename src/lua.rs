@@ -39,18 +39,21 @@ impl LuaEngine {
         Ok(())
     }
 
-    pub fn run_callbacks(&self, data: &TrackData) -> Result<Option<TrackData>> {
+    pub fn run_callbacks(&self, data: TrackData) -> Result<Option<TrackData>> {
+        let mut modified = false;
+        let mut value = data;
         let keys = self.callbacks.lock().unwrap();
-
-        let mut value = self.lua.to_value(data)?;
-
         for key in keys.iter() {
             let func: LuaFunction = self.lua.registry_value(key)?;
-            value = func.call(value.clone())?;
+            let lua_value = self.lua.to_value(&value)?;
+            let ret = func.call(lua_value)?;
+            let ret: Option<TrackData> = self.lua.from_value(ret)?;
+            if let Some(new_value) = ret {
+                modified = true;
+                value = new_value;
+            }
         }
 
-        let new_data: Option<TrackData> = self.lua.from_value(value)?;
-
-        Ok(new_data)
+        Ok(if modified { Some(value) } else { None })
     }
 }

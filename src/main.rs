@@ -6,7 +6,7 @@ use std::{
 use anyhow::Result;
 use audiotags::{Album, Tag};
 
-use crate::{config::Config, lua::LuaEngine, trackdata::TrackData};
+use crate::{config::Config, lua::LuaEngine};
 
 mod config;
 mod lua;
@@ -29,8 +29,7 @@ fn main() -> Result<()> {
     let files = find_files(&config.root)?;
     for file in files {
         let mut tag = Tag::new().read_from_path(&file)?;
-        let data = TrackData::from(&tag);
-        let new_data = lua.run_callbacks(&data)?;
+        let new_data = lua.run_callbacks((&tag).into())?;
 
         if let Some(new_data) = new_data {
             println!("retagging {}", file.display());
